@@ -458,6 +458,16 @@ class QuantizedModel:
                 groups = layer_info['groups']
                 in_channels = layer_info['in_channels']
                 out_channels = layer_info['out_channels']
+                padding = layer_info['padding']
+                
+                # Apply padding
+                if padding > 0:
+                    current_data = np.pad(
+                        current_data,
+                        pad_width=((0, 0), (0, 0), (padding, padding), (padding, padding)),
+                        mode='constant',
+                        constant_values=(0,0)
+                    )
 
                 weights = np.array(layer_info['quantized_weights']).reshape(
                     out_channels, in_channels // groups, kernel_size, kernel_size)
