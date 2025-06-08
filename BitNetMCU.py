@@ -402,6 +402,16 @@ class QuantizedModel:
                     'quantization_type': layer.QuantType
                 }
                 quantized_model.append(layer_info)
+                
+            elif isinstance(layer, nn.MaxPool2d):
+                layer_info = {
+                    'layer_type': 'MaxPool2d',
+                    'layer_order': i,
+                    'kernel_size': layer.kernel_size,
+                    'stride': layer.stride,
+                    'padding': layer.padding
+                }
+                quantized_model.append(layer_info)
 
         self.total_bits = totalbits
         self.quantized_model = quantized_model
@@ -499,6 +509,31 @@ class QuantizedModel:
                 max_val = np.max(output, axis=(1, 2, 3), keepdims=True)
                 current_data = np.round(output * (127.0 / max_val)).clip(0, 127).astype(np.int8)
 
+            elif layer_info['layer_type'] == 'MaxPool2d':
+                kernel_size = layer_info['kernel_size'] # Assuming square kernel
+                stride = layer_info['stride']
+
+                # Extract input dimensions
+                batch_size, channels, height, width = current_data.shape
+
+                out_height = (height - kernel_size) // stride + 1
+                out_width = (width - kernel_size) // stride + 1
+
+                # Initialize output
+                output = np.zeros((batch_size, channels, out_height, out_width), dtype=current_data.dtype)
+
+                # Perform max pooling
+                for i in range(out_height):
+                    for j in range(out_width):
+                        h_start = i * stride
+                        h_end = h_start + kernel_size
+                        w_start = j * stride
+                        w_end = w_start + kernel_size
+
+                        patch = current_data[:, :, h_start:h_end, w_start:w_end]
+                        output[:, :, i, j] = np.max(patch, axis=(2, 3))
+
+                current_data = output
 
         # no renormalization for the last layer
         weights = np.array(self.quantized_model[-1]['quantized_weights'])
