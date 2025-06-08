@@ -136,3 +136,60 @@ class MAXMNIST(nn.Module):
         x = self.fcl(x)
         return x
 
+
+class VGG(nn.Module):
+    def __init__(self,network_width1=256,network_width2=128,network_width3=0,QuantType='Binary',WScale='PerTensor',NormType='BatchNorm', in_channels=1, in_size=32, num_classes=10):
+        super(VGG, self).__init__()
+
+        fmap_size = in_size // 8   # 32 -> 16 -> 8 -> 4 (3 次 MaxPool)
+
+        # Conv1
+        self.model = nn.Sequential(
+            BitConv2d(in_channels, 64, kernel_size=3, stride=1, padding=1, groups=1,QuantType=QuantType,NormType='None', WScale=WScale),
+            # nn.BatchNorm2d(64),
+            nn.ReLU(inplace=True),
+            nn.MaxPool2d(kernel_size=2, stride=2),  # 32×32 -> 16×16
+        
+        
+        # Conv2
+            BitConv2d(64, 192, kernel_size=3, stride=1, padding=1, groups=1,QuantType=QuantType,NormType='None', WScale=WScale),
+            # nn.BatchNorm2d(192),
+            nn.ReLU(inplace=True),
+            nn.MaxPool2d(kernel_size=2, stride=2),  # 16×16 -> 8×8
+        
+        
+        # Conv3
+            BitConv2d(192, 384, kernel_size=3, stride=1, padding=1, groups=1,QuantType=QuantType,NormType='None', WScale=WScale), 
+            # nn.BatchNorm2d(384),
+            nn.ReLU(inplace=True),
+            # nn.MaxPool2d(kernel_size=2, stride=2)  
+        
+        
+        # Conv4 
+            BitConv2d(384, 256, kernel_size=3, stride=1, padding=1, groups=1,QuantType=QuantType,NormType='None', WScale=WScale),
+            # nn.BatchNorm2d(256),
+            nn.ReLU(inplace=True),
+        
+        
+        # Conv5 
+            BitConv2d(256, 256, kernel_size=3, stride=1, padding=1, groups=1,QuantType=QuantType,NormType='None', WScale=WScale),
+            # nn.BatchNorm2d(256),
+            nn.ReLU(inplace=True),
+            nn.MaxPool2d(kernel_size=2, stride=2),  # 8×8 -> 4×4
+
+        # Fully Connected Layers
+            nn.Flatten(),
+            BitLinear(256 * fmap_size * fmap_size, network_width1,QuantType=QuantType,NormType=NormType, WScale=WScale), # 256×4×4 = 4096
+            nn.ReLU(),
+            # nn.Flatten(),
+            BitLinear(network_width1, network_width2,QuantType=QuantType,NormType=NormType, WScale=WScale),
+            nn.ReLU(),
+        )        
+       
+        # Final classifier
+        self.fc8 = BitLinear(network_width2, 10,QuantType=QuantType,NormType=NormType, WScale=WScale)
+
+    def forward(self, x):
+        x = self.model(x)
+        x = self.fc8(x)
+        return x
