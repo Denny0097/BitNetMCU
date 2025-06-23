@@ -243,8 +243,8 @@ if __name__ == '__main__':
     transform = transforms.Compose([
         transforms.Resize((32, 32)),  # Resize images to 16x16
         transforms.ToTensor(),
-        transforms.Normalize((0.4914, 0.4822, 0.4465),  # CIFAR-10 的 mean
-                             (0.2470, 0.2435, 0.2616))  # CIFAR-10 的 std
+        transforms.Normalize((0.4914, 0.4822, 0.4465),  # CIFAR-10 mean
+                             (0.2470, 0.2435, 0.2616))  # CIFAR-10 std
     ])
 
     train_data = datasets.CIFAR10(root='data', train=True, transform=transform, download=True)
@@ -256,10 +256,10 @@ if __name__ == '__main__':
             # 10,10 seems to be best combination
             transforms.RandomRotation(degrees=hyperparameters["rotation1"]),
             transforms.RandomAffine(degrees=hyperparameters["rotation2"], translate=(0.1, 0.1), scale=(0.9, 1.1)),   # both are needed for best results.
-            transforms.Resize((32, 32)),  # Resize images to 16x16
+            transforms.Resize((32, 32)), 
             transforms.ToTensor(),
-            transforms.Normalize((0.4914, 0.4822, 0.4465),  # CIFAR-10 的 mean
-                                (0.2470, 0.2435, 0.2616))  # CIFAR-10 的 std
+            transforms.Normalize((0.4914, 0.4822, 0.4465),  # CIFAR-10 mean
+                                (0.2470, 0.2435, 0.2616))  # CIFAR-10 std
         ])
 
         augmented_train_data = datasets.CIFAR10(root='data', train=True, transform=augmented_transform)
