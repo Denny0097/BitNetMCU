@@ -247,7 +247,6 @@ def export_to_hfile(quantized_model, filename, runname):
 
         f.write('#endif\n')
 
-
 def plot_test_images(test_loader):
     dataiter = iter(test_loader)
     images, labels = next(dataiter)
@@ -264,6 +263,8 @@ def plot_test_images(test_loader):
 
 def print_stats(quantized_model):
     for layer_info in quantized_model.quantized_model:
+        if 'quantized_weights' not in layer_info:
+            continue
         weights = np.array(layer_info['quantized_weights'])
         print()
         print(f'Layer: {layer_info["layer_order"]}, Max: {np.max(weights)}, Min: {np.min(weights)}, Mean: {np.mean(weights)}, Std: {np.std(weights)}')
@@ -314,7 +315,7 @@ def plot_weights(quantized_model):
     first_layer_weights = np.array(quantized_model.quantized_model[0]['quantized_weights'])
 
     # Step 2: Reshape the weights into a 16x16 grid for each output channel
-    reshaped_weights = first_layer_weights.reshape(-1, 16, 16)
+    reshaped_weights = first_layer_weights.reshape(-1, 32, 32)
 
     # Calculate the number of output channels
     num_channels = reshaped_weights.shape[0]
@@ -342,23 +343,38 @@ def plot_weights(quantized_model):
     plt.show(block=False)
 
 def plot_weight_histograms(quantized_model):
-    fig = plt.figure(figsize=(10, 10))
+    quant_layers = [
+        layer for layer in quantized_model.quantized_model
+        if 'quantized_weights' in layer
+    ]
+    num_plots = len(quant_layers)
+    if num_plots == 0:
+        print("No quantized layers to plot.")
+        return
 
-    for layer_index, layer in enumerate(quantized_model.quantized_model):
-        layer_weights = np.array(layer['quantized_weights'])
-        bpw = layer['bpw']
+    fig = plt.figure(figsize=(10, 2 * num_plots))
 
-        flattened_weights = layer_weights.flatten()
+    for idx, layer in enumerate(quant_layers, start=1):
+        weights = np.array(layer['quantized_weights'])
+        bpw     = layer.get('bpw', None)
+        flat    = weights.flatten()
 
-        ax = fig.add_subplot(len(quantized_model.quantized_model), 1, layer_index + 1)
+        ax = fig.add_subplot(num_plots, 1, idx)
 
-        # ax.hist(flattened_weights, width=1, bins='auto')
-        sns.histplot(flattened_weights, bins=2**bpw, ax=ax, kde=True)
-        ax.set_title(f'Layer {layer_index+1} Weight Distribution')
+        # 安全地计算 bins
+        if bpw is not None and float(bpw).is_integer():
+            n_bins = int(2**int(bpw))
+        else:
+            n_bins = len(np.unique(flat))
 
+        sns.histplot(flat, bins=n_bins, ax=ax, kde=True)
+        ax.set_title(f'Layer {layer["layer_order"]} ({layer["layer_type"]}) Distribution')
+        
+        ax.set_ylabel("Count")
+    ax.set_xlabel("Quantized Weight Value")
     plt.tight_layout()
     plt.show(block=False)
-
+    
 if __name__ == '__main__':
     parser = argparse.ArgumentParser(description='Training script')
     parser.add_argument('--params', type=str, help='Name of the parameter file', default='trainingparameters.yaml')
@@ -380,15 +396,23 @@ if __name__ == '__main__':
 
     device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
 
-    # Load the MNIST dataset
+    # Load the CIPHAR10 dataset
     transform = transforms.Compose([
-        transforms.Resize((16, 16)),  # Resize images to 16x16
+        transforms.Resize((32, 32)),  # Resize images to 32x32
         transforms.ToTensor(),
-        transforms.Normalize((0.1307,), (0.3081,))
+        transforms.Normalize((0.4914, 0.4822, 0.4465),  # CIFAR-10 的 mean
+                             (0.2470, 0.2435, 0.2616))  # CIFAR-10 的 std
     ])
-
-    train_data = datasets.MNIST(root='data', train=True, transform=transform, download=True)
-    test_data = datasets.MNIST(root='data', train=False, transform=transform)
+    train_data = datasets.CIFAR10(root='data', train=True, transform=transform, download=True)
+    test_data = datasets.CIFAR10(root='data', train=False, transform=transform)
+    # Load the MNIST dataset
+    # transform = transforms.Compose([
+    #     transforms.Resize((32, 32)),  # Resize images to 16x16
+    #     transforms.ToTensor(),
+    #     transforms.Normalize((0.1307,), (0.3081,))
+    # ])
+    # train_data = datasets.MNIST(root='data', train=True, transform=transform, download=True)
+    # test_data = datasets.MNIST(root='data', train=False, transform=transform)
     # Create data loaders
     test_loader = DataLoader(test_data, batch_size=hyperparameters["batch_size"], shuffle=False)
 
@@ -412,6 +436,8 @@ if __name__ == '__main__':
             _, predicted = torch.max(outputs.data, 1)
             total += labels.size(0)
             correct += (predicted == labels).sum().item()
+            # print(f'Predictions: {predicted}')
+            # print(f'Labels: {labels}')
     testaccuracy = correct / total * 100
     print(f'Accuracy/Test of trained model: {testaccuracy} %')
 
@@ -439,6 +465,7 @@ if __name__ == '__main__':
 
     # Iterate over the test data
     for input_data, labels in test_loader:
+        
         # Reshape and convert to numpy
         input_data = input_data.view(input_data.size(0), -1).cpu().numpy()
 
@@ -449,13 +476,18 @@ if __name__ == '__main__':
 
         # Get predictions
         predict = np.argmax(result, axis=1)
-
+        # print(f'Predictions: {predict}')
+        # print(f'Labels: {labels}')
         # Calculate the fraction of correct predictions for this batch
         correct_predictions = (predict == labels).sum()
 
         # Update counters
         total_correct_predictions += correct_predictions  # Multiply by batch size
         total_samples += input_data.shape[0]
+        print(f'sample counter:  {total_samples}')
+        overall_correct_predictions = total_correct_predictions / total_samples
+        print('Accuracy/Test of quantized model:', overall_correct_predictions * 100, '%')
+        break
 
     # Calculate and print the overall fraction of correct predictions
     overall_correct_predictions = total_correct_predictions / total_samples

@@ -54,10 +54,10 @@ class BitQuant:
 
         if self.QuantType in ['Binary', 'BinarySym']:
             self.bpw = 1
-        elif self.QuantType in ['2bitsym']:
+        elif self.QuantType in ['2bitsym', 'I2_S']:
             self.bpw = 2
         elif self.QuantType in ['Ternary']:
-            self.bpw = 1.6
+            self.bpw = 1.58  # 1.58 bits
         elif self.QuantType in ['4bit', '4bitsym', 'FP130' , 'NF4']:
             self.bpw = 4
         elif self.QuantType == '5bitsym':
@@ -142,13 +142,13 @@ class BitQuant:
            scale = 128.0 / self.s
         elif self.QuantType == 'NF4':
             scale = 1.0 / self.s
-        elif self.QuantType == 'Ternary': # 1.58bits
+        elif self.QuantType in ['Ternary', 'I2_S']: # 1.58bits or 2bits
             # scale = 1.0 / self.s
             scale = 1.0 / w.abs().mean().clamp_(min=1e-5)
         else:
             scale = (2.0**(self.bpw-1)) / self.s
 
-        if self.QuantType == 'Ternary': # 1.58bits
+        if self.QuantType in ['Ternary', 'I2_S']: # 1.58bits or 2bits
             u = (w * scale ).round().clamp_(-1, 1)
         elif self.QuantType == 'Binary': # 1 bit
             e = w.mean()

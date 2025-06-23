@@ -36,7 +36,7 @@ def load_model(model_name, params):
             NormType=params["NormType"],
             WScale=params["WScale"],
             in_channels=3,
-            in_size=32,
+            in_size=32
         )
     except AttributeError:
         raise ValueError(f"Model {model_name} not found in models.py")

@@ -138,7 +138,7 @@ class MAXMNIST(nn.Module):
 
 
 class VGG(nn.Module):
-    def __init__(self,network_width1=256,network_width2=128,network_width3=0,QuantType='Binary',WScale='PerTensor',NormType='BatchNorm', in_channels=1, in_size=16, num_classes=10):
+    def __init__(self,network_width1=256,network_width2=128,network_width3=0,QuantType='Binary',WScale='PerTensor',NormType='BatchNorm', in_channels=3, in_size=32, num_classes=10):
         super(VGG, self).__init__()
 
         fmap_size = in_size // 8   # 32 -> 16 -> 8 -> 4 (3 MaxPool)
