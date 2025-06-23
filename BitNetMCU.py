@@ -257,6 +257,8 @@ class BitLinear(nn.Linear, BitQuant):
             layer_mean = torch.mean(x, dim=-1, keepdim=True)
             layer_var = torch.var(x, dim=-1, keepdim=True, unbiased=False)
             z = (x - layer_mean) / torch.sqrt(layer_var + 1e-5)
+        elif self.NormType == 'None':
+            z = x
         else:
             raise AssertionError(f"Invalid NormType: {self.NormType}. Expected one of: 'RMS', 'Lin', 'BatchNorm', 'LayerNorm'")
         return z
@@ -372,7 +374,7 @@ class QuantizedModel:
                     'outgoing_weights': quantized_weight.shape[0],
                     'quantized_weights': quantized_weight.tolist(),
                     'WScale': layer.WScale,
-                    # 'quantized_scale': scalequant.cpu().numpy().tolist() if layer.WScale=='PerOutput' else [], # TODO: "PerOutput" scaling
+                    'quantized_scale': scale.cpu().numpy().tolist() if layer.WScale=='PerOutput' else [], # TODO: "PerOutput" scaling
                     'bpw': bpw, # bits per weight
                     'quantization_type': layer.QuantType
                 }
@@ -399,10 +401,11 @@ class QuantizedModel:
                     'groups': layer.groups,
                     'quantized_weights': quantized_weight.tolist(),
                     'bpw': bpw,
+                    'bias' : layer.bias is not None,
                     'quantization_type': layer.QuantType
                 }
                 quantized_model.append(layer_info)
-                
+
             elif isinstance(layer, nn.MaxPool2d):
                 layer_info = {
                     'layer_type': 'MaxPool2d',
@@ -410,6 +413,12 @@ class QuantizedModel:
                     'kernel_size': layer.kernel_size,
                     'stride': layer.stride,
                     'padding': layer.padding
+                }
+                quantized_model.append(layer_info)
+            elif isinstance(layer, nn.ReLU):
+                layer_info = {
+                    'layer_type': 'ReLU',
+                    'layer_order': i
                 }
                 quantized_model.append(layer_info)
 
@@ -437,12 +446,16 @@ class QuantizedModel:
         current_data = np.round(input_data * scale).clip(-128, 127)
 
         for layer_info in self.quantized_model[:-1]:  # For all layers except the last one
-            # print(f'layer: {layer_info["layer_type"], layer_info["layer_order"] }')
+            print(f'layer: {layer_info["layer_type"], layer_info["layer_order"] }')
 
             if layer_info['layer_type'] == 'BitLinear':
+                # print("Input to BitLinear shape:", current_data.shape)
+                # print("Input sample:", current_data[0])
+                # print("Mean/std across batch:", current_data.mean(), current_data.std())
 
                 if len(current_data.shape) == 4:
                     # reshape from (batch_size, channels, height, width) to (batch_size, features)
+                    # print(f'Reshaping input data from {current_data.shape} to 2D for BitLinear layer')
                     current_data = current_data.reshape(current_data.shape[0], current_data.shape[1] * current_data.shape[2] * current_data.shape[3])
 
                 weights = np.array(layer_info['quantized_weights'])
@@ -465,11 +478,18 @@ class QuantizedModel:
                     current_data = current_data.reshape(current_data.shape[0], layer_info['in_channels'], height, width)
 
                 kernel_size = layer_info['kernel_size'][0]  # Assuming square kernel
+                padding = layer_info['padding']
                 groups = layer_info['groups']
                 in_channels = layer_info['in_channels']
                 out_channels = layer_info['out_channels']
-                padding = layer_info['padding']
-                
+                stride = layer_info['stride']
+
+                H_in, W_in = current_data.shape[2], current_data.shape[3]
+
+                # update the incoming dimensions
+                layer_info['incoming_x'] = current_data.shape[2]
+                layer_info['incoming_y'] = current_data.shape[3]
+
                 # Apply padding
                 if padding > 0:
                     current_data = np.pad(
@@ -478,18 +498,23 @@ class QuantizedModel:
                         mode='constant',
                         constant_values=(0,0)
                     )
+                
+                # print("Activation shape:", current_data.shape)
+                # print("Activation data (partial):", current_data[0, 0, :, :])  # 印出第一張圖第 0 個 channel
 
                 weights = np.array(layer_info['quantized_weights']).reshape(
                     out_channels, in_channels // groups, kernel_size, kernel_size)
 
                 # print(f'weights: {weights.shape} data: {current_data.shape}')
-                output = np.zeros((current_data.shape[0], layer_info['out_channels'],
-                                current_data.shape[2] - kernel_size + 1, current_data.shape[3] - kernel_size + 1))
+                # print("Weight of first output channel:", weights[0])
+                
+                H_out = (H_in + 2 * padding - kernel_size) // stride + 1
+                W_out = (W_in + 2 * padding - kernel_size) // stride + 1
 
-                # update the incoming and outgoing dimensions
-                layer_info['incoming_x'] = current_data.shape[2]
-                layer_info['incoming_y'] = current_data.shape[3]
+                output = np.zeros((current_data.shape[0], layer_info['out_channels'], H_out, W_out))
+                print(f'output: {output.shape}')
 
+                # update the outgoing dimensions
                 layer_info['outgoing_x'] = output.shape[2]
                 layer_info['outgoing_y'] = output.shape[3]
 
@@ -501,13 +526,17 @@ class QuantizedModel:
                             group_weights = weights[g*(out_channels//groups):(g+1)*(out_channels//groups)]
                             output[:, g*(out_channels//groups):(g+1)*(out_channels//groups), i, j] = \
                                 np.sum(patch[:, np.newaxis, :, :, :] * group_weights, axis=(2, 3, 4))
+                    # print("Patch at (i, j):", patch.shape)
+                    # print("Group weights:", group_weights.shape)
+                    # print("Patch * weights sum:", np.sum(patch[:, np.newaxis, :, :, :] * group_weights, axis=(2, 3, 4)))
 
 
                 # print(f'output: {output.shape}')
                 # Apply ReLU and quantize
-                output = np.maximum(output, 0)
+                output = np.maximum(output, 0) # ReLU activation
                 max_val = np.max(output, axis=(1, 2, 3), keepdims=True)
                 current_data = np.round(output * (127.0 / max_val)).clip(0, 127).astype(np.int8)
+
 
             elif layer_info['layer_type'] == 'MaxPool2d':
                 kernel_size = layer_info['kernel_size'] # Assuming square kernel
@@ -535,6 +564,8 @@ class QuantizedModel:
 
                 current_data = output
 
+
+
         # no renormalization for the last layer
         weights = np.array(self.quantized_model[-1]['quantized_weights'])
         logits = np.dot(current_data, weights.T)  # Matrix multiplication
@@ -544,3 +575,4 @@ class QuantizedModel:
             logits = logits * scale
 
         return logits
+

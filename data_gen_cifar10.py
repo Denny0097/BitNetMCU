@@ -15,7 +15,7 @@ def process_cifar10_to_c_array(dataset, index, class_names):
 
     transform = transforms.Compose([
         transforms.ToTensor(), 
-        transforms.Normalize((np.mean(mean_rgb),), (np.mean(std_rgb),)) 
+        transforms.Normalize(mean_rgb, std_rgb)
     ])
     img_standardized = transform(img_pil)
 

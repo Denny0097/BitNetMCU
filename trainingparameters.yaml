@@ -4,7 +4,7 @@
 model: 'VGG' # 'FCMNIST' or 'CNNMNIST' This is the class name of the model as defined in models.py.
 
 # Quantization settings
-QuantType: 'Binary' # 'Ternary', 'Binary', 'BinaryBalanced', '2bitsym', '4bit', '4bitsym', '8bit', 'None", 'FP130', 'NF4'
+QuantType: 'I2_S' # 'Ternary', 'I2_S', 'Binary', 'BinaryBalanced', '2bitsym', '4bit', '4bitsym', '8bit', 'None", 'FP130', 'NF4'
 NormType: 'RMS' # 'RMS', 'Lin', 'BatchNorm'
 WScale: 'PerTensor' # 'PerTensor', 'PerOutput'
 

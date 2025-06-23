@@ -257,13 +257,11 @@ void precessfc_I2_S(int8_t *activations, const uint32_t *weights, int32_t bits_p
             // encoding: 00→-1, 01→0, 10→+1
 
             int32_t weight_multiplier = (int32_t)wbits - 1; // {-1, 0, 1}
-            sum += (int32_t)act * weight_multiplier;
-            // // 產生遮罩
-            // int32_t mask_plus_one = 0 - (weight_multiplier > 0);  // is 1? -> -1, else 0
-            // int32_t mask_minus_one = 0 - (weight_multiplier < 0); // is -1? -> -1, else 0
-            
-            // // 用 & 選擇性地加或減
-            // sum += (act & mask_plus_one) - (act & mask_minus_one);
+            // sum += (int32_t)act * weight_multiplier;
+                               
+
+            int8_t delta = ( -((int8_t)(wbits == 0x2)) & act ) | ( -((int8_t)(wbits == 0x0)) & (-act) );
+            sum += delta;
         }
 
         output[i] = sum;
@@ -308,16 +306,12 @@ void processcvlayer_I2_S(int8_t *activations, const uint32_t *weights, int32_t b
                                 int bit_off  = bit_pos % 32;
 
                                 uint32_t wbits = (weights[word_idx] >> bit_off) & 0x3;  // 2-bit
-                                
-
-                                int32_t weight_multiplier = (int32_t)wbits - 1; // {-1, 0, 1}
-
-                                // 產生遮罩
-                                int32_t mask_plus_one = 0 - (weight_multiplier > 0);  // is 1? -> -1, else 0
-                                int32_t mask_minus_one = 0 - (weight_multiplier < 0); // is -1? -> -1, else 0
-                                
-                                // 用 & 選擇性地加或減
-                                sum += (act & mask_plus_one) - (act & mask_minus_one);
+                                // encoding: 00→-1, 01→0, 10→+1
+                                // int32_t weight_multiplier = (int32_t)wbits - 1; // {-1, 0, 1}
+                                // sum += (int32_t)act * weight_multiplier;
+                                int8_t delta = ( -((int8_t)(wbits == 0x2)) & act ) | ( -((int8_t)(wbits == 0x0)) & (-act) );
+                                sum += delta;
+                                // sum += act * weight_multiplier; // this is the same as above, but more readable
                             }
                         }
                     }

@@ -58,8 +58,8 @@ void main(void) {
     // predicted_label = BitMnistInference_VGG8_I2_S(input_data_9);
     // printf("label: %d predicted: %d\n", label_9, predicted_label);
     // for cifar10
-    predicted_label = BitMnistInference_VGG8_I2_S(cifar10_data_1);
-    printf("label: %d predicted: %d\n", cifar10_label_1, predicted_label);
+    predicted_label = BitMnistInference_VGG8_I2_S(cifar10_data_0);
+    printf("label: %d predicted: %d\n", cifar10_label_0, predicted_label);
     predicted_label = BitMnistInference_VGG8_I2_S(cifar10_data_1);
     printf("label: %d predicted: %d\n", cifar10_label_1, predicted_label);
     predicted_label = BitMnistInference_VGG8_I2_S(cifar10_data_2);
@@ -80,7 +80,6 @@ void main(void) {
     printf("label: %d predicted: %d\n", cifar10_label_9, predicted_label);
     
 }
-
 
 /**
  * @brief Performs inference on the VGG model.
@@ -122,6 +121,7 @@ uint32_t BitMnistInference_VGG8_I2_S(int8_t *input) {
     int32_t fc3_out[L20_outgoing_weights];
     int8_t fc3relu_out[L20_outgoing_weights];
 
+
     clock_t start_time, end_time;
     double cpu_time_used;
 
@@ -143,7 +143,7 @@ uint32_t BitMnistInference_VGG8_I2_S(int8_t *input) {
     // L4 (Max Pooling)
     start_time = clock();
     Maxp(L3_out, L4_out, L2_outgoing_shape / 4, L2_out_channels, L2_out_channels,
-        L2_outgoing_x, L2_outgoing_y);
+        L2_outgoing_x, L2_outgoing_y); 
     end_time = clock();
     cpu_time_used = ((double) (end_time - start_time)) / CLOCKS_PER_SEC * 1000.0;
     printf("L4 (Maxp) execution time: %.3f ms\n", cpu_time_used);
@@ -166,7 +166,7 @@ uint32_t BitMnistInference_VGG8_I2_S(int8_t *input) {
     // L7 (Max Pooling)
     start_time = clock();
     Maxp(L6_out, L7_out, L5_outgoing_shape / 4, L5_out_channels, L5_out_channels,
-        L5_outgoing_x, L5_outgoing_y); 
+        L5_outgoing_x, L5_outgoing_y);
     end_time = clock();
     cpu_time_used = ((double) (end_time - start_time)) / CLOCKS_PER_SEC * 1000.0;
     printf("L7 (Maxp) execution time: %.3f ms\n", cpu_time_used);
@@ -223,8 +223,6 @@ uint32_t BitMnistInference_VGG8_I2_S(int8_t *input) {
     end_time = clock();
     cpu_time_used = ((double) (end_time - start_time)) / CLOCKS_PER_SEC * 1000.0;
     printf("L14 (Maxp) execution time: %.3f ms\n", cpu_time_used);
-
-
 
     // L16 (Fully Connected Layer)
     start_time = clock();
